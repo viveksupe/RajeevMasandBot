@@ -1,4 +1,5 @@
 import os
+import pickle
 import re
 import urllib2
 from collections import OrderedDict
@@ -8,6 +9,21 @@ from bs4 import BeautifulSoup
 
 review_page = {'Bollywood:\n': 'https://www.rajeevmasand.com/category/reviews/our-films/',
                'Hollywood:\n': 'https://www.rajeevmasand.com/category/reviews/their-films/'}
+FILE_NAME = '/usr/src/app/state.pkl'
+state_content = None
+
+try:
+    pkl_file = open(FILE_NAME, 'rb')
+    state_content = pickle.load(pkl_file)
+    pkl_file.close()
+except IOError:
+    # If not exists, create the file
+    pkl_file = open(FILE_NAME, 'w+')
+    pickle.dump(set(), pkl_file)
+    pkl_file.close()
+
+state_set = set() if state_content is None else state_content
+
 for page_to_scan in review_page:
     output = page_to_scan
     page = urllib2.urlopen(review_page[page_to_scan])
@@ -22,9 +38,20 @@ for page_to_scan in review_page:
         soup = BeautifulSoup(page, 'html.parser')
         for images in soup.find_all('img'):
             if re.match(r"<img alt=\"[0-6.]*\" src=\"/assets/images", str(images)):
-                output += "--------------------------------------------------\n" + movie_name + "\n\tRating: " + images[
-                    "alt"] + "\n--------------------------------------------------\n"
-
+                if movie_name not in state_set:
+                    output += "--------------------------------------------------\n" + movie_name + "\n\tRating: " + \
+                              images["alt"] + "\n--------------------------------------------------\n"
+                state_set.add(movie_name)
+    if output is page_to_scan:
+        output += "--------------------------------------------------\nNo New " \
+                  "Reviews\n--------------------------------------------------\n "
     r = requests.post(os.environ['SLACK_URL'],
                       data={'text': output})
     print r.text
+
+if len(state_set) > 50:
+    state_set.clear()
+
+output = open(FILE_NAME, 'wb')
+pickle.dump(state_set, output)
+output.close()
