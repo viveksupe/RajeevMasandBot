@@ -1,7 +1,6 @@
 import os
 import pickle
 import re
-import urllib2
 from collections import OrderedDict
 import requests
 
@@ -16,9 +15,9 @@ try:
     pkl_file = open(FILE_NAME, 'rb')
     state_content = pickle.load(pkl_file)
     pkl_file.close()
-except IOError:
+except (IOError, EOFError):
     # If not exists, create the file
-    pkl_file = open(FILE_NAME, 'w+')
+    pkl_file = open(FILE_NAME, 'wb+')
     pickle.dump(set(), pkl_file)
     pkl_file.close()
 
@@ -26,16 +25,16 @@ state_set = set() if state_content is None else state_content
 
 for page_to_scan in review_page:
     output = page_to_scan
-    page = urllib2.urlopen(review_page[page_to_scan])
-    soup = BeautifulSoup(page, 'html.parser')
+    page = requests.get(review_page[page_to_scan])
+    soup = BeautifulSoup(page.content, 'html.parser')
     review_list = soup.find("div", {"class": "have-you-seen"})
     links_to_process = OrderedDict()
     for link in review_list.find_all('a', href=True):
         links_to_process[link.text] = link['href']
 
     for movie_name in links_to_process:
-        page = urllib2.urlopen(links_to_process[movie_name])
-        soup = BeautifulSoup(page, 'html.parser')
+        page = requests.get(links_to_process[movie_name])
+        soup = BeautifulSoup(page.content, 'html.parser')
         for images in soup.find_all('img'):
             if re.match(r"<img alt=\"[0-6.]*\" src=\"/assets/images", str(images)):
                 if movie_name not in state_set:
@@ -47,7 +46,7 @@ for page_to_scan in review_page:
                   "Reviews\n--------------------------------------------------\n "
     r = requests.post(os.environ['SLACK_URL'],
                       data={'text': output})
-    print r.text
+    print(r.text)
 
 if len(state_set) > 50:
     state_set.clear()
