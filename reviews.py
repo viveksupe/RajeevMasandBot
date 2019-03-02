@@ -22,6 +22,7 @@ except (IOError, EOFError):
     pkl_file.close()
 
 state_set = set() if state_content is None else state_content
+current_state_set = set()
 
 for page_to_scan in review_page:
     output = page_to_scan
@@ -37,6 +38,7 @@ for page_to_scan in review_page:
         soup = BeautifulSoup(page.content, 'html.parser')
         for images in soup.find_all('img'):
             if re.match(r"<img alt=\"[0-6.]*\" src=\"/assets/images", str(images)):
+                current_state_set.add(movie_name)
                 if movie_name not in state_set:
                     output += "--------------------------------------------------\n" + movie_name + "\n\tRating: " + \
                               images["alt"] + "\n--------------------------------------------------\n"
@@ -48,8 +50,8 @@ for page_to_scan in review_page:
                       data={'text': output})
     print(r.text)
 
-if len(state_set) > 50:
-    state_set.clear()
+# Discard Old Entries
+state_set = state_set.union(current_state_set)
 
 output = open(FILE_NAME, 'wb')
 pickle.dump(state_set, output)
